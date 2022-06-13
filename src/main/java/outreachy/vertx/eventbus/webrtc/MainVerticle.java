@@ -1,0 +1,47 @@
+package outreachy.vertx.eventbus.webrtc;
+
+import io.vertx.core.AbstractVerticle;
+import io.vertx.core.Promise;
+import io.vertx.core.json.JsonObject;
+import io.vertx.ext.bridge.PermittedOptions;
+import io.vertx.ext.web.Router;
+import io.vertx.ext.web.handler.BodyHandler;
+import io.vertx.ext.web.handler.StaticHandler;
+import io.vertx.ext.web.handler.sockjs.SockJSBridgeOptions;
+import io.vertx.ext.web.handler.sockjs.SockJSHandler;
+
+public class MainVerticle extends AbstractVerticle {
+
+  @Override
+  public void start(Promise<Void> startPromise) {
+
+    // 1. register eventbus addresses
+    vertx.eventBus()
+      // 2. we will consume JSON objects sent to "webrtc.test"
+      .<JsonObject>consumer("webrtc.test")
+      .handler(WebRTC::onTestMessage);
+
+    Router router = Router.router(vertx);
+
+    // setup the eventbus sockjs on the server
+    router.route("/eventbus/*")
+        .handler(BodyHandler.create())
+          .subRouter(SockJSHandler.create(vertx)
+            .bridge(new SockJSBridgeOptions()
+              .addInboundPermitted(new PermittedOptions().setAddressRegex("webrtc\\..*"))
+              .addInboundPermitted(new PermittedOptions().setAddressRegex("webrtc\\..*"))));
+
+    // server static files from "src/main/resources/webroot"
+    router.route().handler(StaticHandler.create());
+
+    // start the server
+    vertx.createHttpServer()
+      .requestHandler(router)
+      .listen(8888)
+      .onSuccess(server -> {
+        startPromise.complete();
+        System.out.println("HTTP server started on http://localhost:" + server.actualPort());
+      })
+      .onFailure(startPromise::fail);
+  }
+}

@@ -1,0 +1,36 @@
+<html lang="en">
+<head>
+  <title></title>
+  <script src="sockjs.min.js"></script>
+  <script src="vertx-eventbus.js"></script>
+</head>
+
+<body>
+
+Open the devtools to see this code running.
+
+<script>
+  var eb = new EventBus("http://localhost:8888/eventbus");
+
+  eb.onopen = function () {
+    // sockjs connection is ready!
+
+    // 0. we start here, follow the rest of the logic on the server java side
+    eb.send(
+      // address
+      'webrtc.test',
+      // message
+      {},
+      // callback
+      (err, res) => {
+        if (err) {
+          console.error(err);
+        } else {
+          console.log(res);
+        }
+      });
+  }
+</script>
+
+</body>
+</html>
