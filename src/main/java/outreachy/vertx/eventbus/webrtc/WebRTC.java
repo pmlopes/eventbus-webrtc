@@ -6,7 +6,7 @@ import io.vertx.core.json.JsonObject;
 public class WebRTC {
     public static void onTestMessage(Message<JsonObject> message) {
       // 3. message was received and we are just printing it now
-      System.out.println(message.body());
+      System.out.println("Message received from js client" + message.body());
       // 4. we may want to reply. In this case we sent back {"OK", true}
       message
         .reply(new JsonObject()

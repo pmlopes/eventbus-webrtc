@@ -14,7 +14,7 @@ Open the devtools to see this code running.
 
   eb.onopen = function () {
     // sockjs connection is ready!
-
+    console.log('Successfully connected to signaling server !');
     // 0. we start here, follow the rest of the logic on the server java side
     eb.send(
       // address
@@ -24,9 +24,9 @@ Open the devtools to see this code running.
       // callback
       (err, res) => {
         if (err) {
-          console.error(err);
+          console.error('Error sending message ', err);
         } else {
-          console.log(res);
+          console.log('Message received from server ', res);
         }
       });
   }
