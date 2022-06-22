@@ -136,6 +136,41 @@
       self.sockJSConn.onopen = function () {
         self.enablePing(true);
         self.state = EventBus.OPEN;
+        // TODO: here we begin with the webrtc handshake
+        self.webrtcId = makeUUID(); // this should be unique, perhaps it should happen on the constructor function
+        // we need to listen to a few events on the socket
+        // this connection specific
+        self.registerHandler(
+          `webrtc.signaling.${self.webrtcId}`,
+          message => {
+            console.log(message);
+            // point 5:
+            message.reply({webrtc: "anwser", anwser: 'the_webrtc_anwser_value' });
+          });
+        // generic events to all connections
+        self.registerHandler(
+          'webrtc.signaling',
+          message => {
+            console.log(message);
+            // point 4.
+            // not sure if this is 100% correct, but we need to reply with a webrtc offer
+            // this needs the code we did on the github gist
+            self.send(
+              message.body.address,
+              { webrtc: "offer", offer: 'the_webrtc_offer_value' },
+              reply => {
+                console.log(reply);
+              });
+          });
+
+        // broadcast that we're connected
+        self.publish(
+          'webrtc.signaling',
+          // this message will end up on the event just above
+          { webrtc: "announce", address: `webrtc.signaling.${self.webrtcId}` }
+        );
+
+
         self.onopen && self.onopen();
         if (self.reconnectTimerID) {
           self.reconnectAttempts = 0;

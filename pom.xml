@@ -15,33 +15,23 @@
     <maven.compiler.testSource>11</maven.compiler.testSource>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
-    <vertx.version>4.3.1</vertx.version>
+    <vertx.version>4.3.2-SNAPSHOT</vertx.version>
     <junit-jupiter.version>5.7.0</junit-jupiter.version>
 
     <vertx.verticle>outreachy.vertx.eventbus.webrtc.MainVerticle</vertx.verticle>
   </properties>
 
-  <dependencyManagement>
-    <dependencies>
-      <dependency>
-        <groupId>io.vertx</groupId>
-        <artifactId>vertx-stack-depchain</artifactId>
-        <version>${vertx.version}</version>
-        <type>pom</type>
-        <scope>import</scope>
-      </dependency>
-    </dependencies>
-  </dependencyManagement>
-
   <dependencies>
     <dependency>
       <groupId>io.vertx</groupId>
       <artifactId>vertx-web</artifactId>
+      <version>${vertx.version}</version>
     </dependency>
 
     <dependency>
       <groupId>io.vertx</groupId>
       <artifactId>vertx-junit5</artifactId>
+      <version>${vertx.version}</version>
       <scope>test</scope>
     </dependency>
     <dependency>
