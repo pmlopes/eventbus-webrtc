@@ -16,7 +16,7 @@
 !function (factory) {
   if (typeof require === 'function' && typeof module !== 'undefined') {
     // CommonJS loader
-    var SockJS = require('sockjs-client');
+    const SockJS = require('sockjs-client');
     if (!SockJS) {
       throw new Error('vertx-eventbus.js requires sockjs-client, see http://sockjs.org');
     }
@@ -36,7 +36,7 @@
 
   function makeUUID() {
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (a, b) {
-      return b = Math.random() * 16, (a == 'y' ? b & 3 | 8 : b | 0).toString(16);
+          return b = Math.random() * 16, (a === 'y' ? b & 3 | 8 : b | 0).toString(16);
     });
   }
 
@@ -46,7 +46,7 @@
         return defaultHeaders;
       }
 
-      for (var headerName in defaultHeaders) {
+      for (let headerName in defaultHeaders) {
         if (defaultHeaders.hasOwnProperty(headerName)) {
           // user can overwrite the default headers
           if (typeof headers[headerName] === 'undefined') {
@@ -67,8 +67,8 @@
    * @param options
    * @constructor
    */
-  var EventBus = function (url, options) {
-    var self = this;
+  const EventBus = function (url, options) {
+    const self = this;
 
     options = options || {};
 
@@ -85,11 +85,11 @@
     this.reconnectDelayMax = options.vertxbus_reconnect_delay_max || 5000;
     this.reconnectExponent = options.vertxbus_reconnect_exponent || 2;
     this.randomizationFactor = options.vertxbus_randomization_factor || 0.5;
-    var getReconnectDelay = function() {
-      var ms = self.reconnectDelayMin * Math.pow(self.reconnectExponent, self.reconnectAttempts);
+    const getReconnectDelay = function() {
+      const ms = self.reconnectDelayMin * Math.pow(self.reconnectExponent, self.reconnectAttempts);
       if (self.randomizationFactor) {
-        var rand =  Math.random();
-        var deviation = Math.floor(rand * self.randomizationFactor * ms);
+        const rand =  Math.random();
+        const deviation = Math.floor(rand * self.randomizationFactor * ms);
         ms = (Math.floor(rand * 10) & 1) === 0  ? ms - deviation : ms + deviation;
       }
       return Math.min(ms, self.reconnectDelayMax) | 0;
@@ -124,7 +124,7 @@
       }
     };
 
-    var setupSockJSConnection = function () {
+    const setupSockJSConnection = function () {
       self.sockJSConn = new SockJS(url, null, options);
       self.state = EventBus.CONNECTING;
 
@@ -193,7 +193,7 @@
       };
 
       self.sockJSConn.onmessage = function (e) {
-        var json;
+        let json;
 
         try {
           json = JSON.parse(e.data);
@@ -216,8 +216,8 @@
 
         if (self.handlers[json.address]) {
           // iterate all registered handlers
-          var handlers = self.handlers[json.address];
-          for (var i = 0; i < handlers.length; i++) {
+          const handlers = self.handlers[json.address];
+          for ( i = 0; i < handlers.length; i++) {
             if (json.type === 'err') {
               handlers[i]({ failureCode: json.failureCode, failureType: json.failureType, message: json.message });
             } else {
@@ -226,7 +226,7 @@
           }
         } else if (self.replyHandlers[json.address]) {
           // Might be a reply message
-          var handler = self.replyHandlers[json.address];
+          const handler = self.replyHandlers[json.address];
           delete self.replyHandlers[json.address];
           if (json.type === 'err') {
             handler({ failureCode: json.failureCode, failureType: json.failureType, message: json.message });
@@ -264,7 +264,7 @@
       headers = {};
     }
 
-    var envelope = {
+    const envelope = {
       type: 'send',
       address: address,
       headers: mergeHeaders(this.defaultHeaders, headers),
@@ -272,7 +272,7 @@
     };
 
     if (callback) {
-      var replyAddress = makeUUID();
+      const replyAddress = makeUUID();
       envelope.replyAddress = replyAddress;
       this.replyHandlers[replyAddress] = callback;
     }
@@ -346,7 +346,7 @@
       throw new Error('INVALID_STATE_ERR');
     }
 
-    var handlers = this.handlers[address];
+    const handlers = this.handlers[address];
 
     if (handlers) {
 
@@ -355,7 +355,7 @@
         headers = {};
       }
 
-      var idx = handlers.indexOf(callback);
+      const idx = handlers.indexOf(callback);
       if (idx !== -1) {
         handlers.splice(idx, 1);
         if (handlers.length === 0) {
@@ -388,10 +388,10 @@
   EventBus.CLOSED = 3;
 
   EventBus.prototype.enablePing = function (enable) {
-    var self = this;
+    const self = this;
 
     if (enable) {
-      var sendPing = function () {
+      const sendPing = function () {
         self.sockJSConn.send(JSON.stringify({ type: 'ping' }));
       };
 
@@ -409,7 +409,7 @@
   };
 
   EventBus.prototype.enableReconnect = function (enable) {
-    var self = this;
+    const self = this;
 
     self.reconnectEnabled = enable;
     if (!enable && self.reconnectTimerID) {
