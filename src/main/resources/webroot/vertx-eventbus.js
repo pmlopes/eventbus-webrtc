@@ -34,6 +34,7 @@
   }
 }(function (SockJS) {
 
+ /**** Utility functions ****/
   function makeUUID() {
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (a, b) {
           return b = Math.random() * 16, (a === 'y' ? b & 3 | 8 : b | 0).toString(16);
@@ -60,6 +61,8 @@
     return headers || {};
   }
 
+/****** End of Utility functions ************/
+
   /**
    * EventBus
    *
@@ -68,6 +71,7 @@
    * @constructor
    */
   const EventBus = function (url, options) {
+      console.log('Connecting to server...');
     const self = this;
 
     options = options || {};
@@ -125,15 +129,16 @@
     };
 
     const setupSockJSConnection = function () {
-      self.sockJSConn = new SockJS(url, null, options);
+      self.sockJSConn = new SockJS(url, options);
       self.state = EventBus.CONNECTING;
-
+      console.log('Setting up socket connection...');
       // handlers and reply handlers are tied to the state of the socket
       // they are added onopen or when sending, so reset when reconnecting
       self.handlers = {};
       self.replyHandlers = {};
 
       self.sockJSConn.onopen = function () {
+        console.log('I\'m executing...');
         self.enablePing(true);
         self.state = EventBus.OPEN;
         // TODO: here we begin with the webrtc handshake
@@ -151,13 +156,14 @@
         self.registerHandler(
           'webrtc.signaling',
           message => {
-            console.log(message);
+            console.log('Generic return', message);
             // point 4.
             // not sure if this is 100% correct, but we need to reply with a webrtc offer
             // this needs the code we did on the github gist
             self.send(
               message.body.address,
               { webrtc: "offer", offer: 'the_webrtc_offer_value' },
+              null,
               reply => {
                 console.log(reply);
               });
@@ -255,6 +261,7 @@
    */
   EventBus.prototype.send = function (address, message, headers, callback) {
     // are we ready?
+    console.log('I enter here ! ')
     if (this.state !== EventBus.OPEN) {
       throw new Error('INVALID_STATE_ERR');
     }
@@ -268,7 +275,7 @@
       type: 'send',
       address: address,
       headers: mergeHeaders(this.defaultHeaders, headers),
-      body: message
+      body: "hELLO World !"
     };
 
     if (callback) {
@@ -326,7 +333,8 @@
       this.sockJSConn.send(JSON.stringify({
         type: 'register',
         address: address,
-        headers: mergeHeaders(this.defaultHeaders, headers)
+        headers: mergeHeaders(this.defaultHeaders, headers),
+        message: {hello: "Hello"}
       }));
     }
 

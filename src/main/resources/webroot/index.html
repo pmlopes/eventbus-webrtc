@@ -8,42 +8,44 @@
 <body>
 
 Open the devtools to see this code running.
-
-<button onclick="connectWithPeers()">Send connect offer</button>
+<input type="text" placeholder="Type something and click send"/>
+<button id="sendBtn">Send</button>
 
 <script>
   const eb = new EventBus("http://localhost:8888/eventbus");
   
   const signalingPrefixAddress = 'webrtc.signaling';
-  const uuid = createUUID();
-
   eb.onopen = function () {
     // sockjs connection is ready!
     console.log('Successfully connected to signaling server !');
     // 0. we start here, follow the rest of the logic on the server java side
+    document.getElementById('sendBtn').addEventListener('click', (event) => {
+        
+        
+    });
     
   };
   
-  function connectWithPeers() {          
-     // Normally supposed to test if connection state is OK here
-     
-    // Register for messages on unique address
-    callSignalingServer(`${signalingPrefixAddress}.${uuid}`, 'REGISTER_FOR_MESSAGES', (err, res) => { console.log('Received a message destined to me only.', uuid); });
-    // Register for general messages
-    callSignalingServer(`${signalingPrefixAddress}`, 'REGISTER_FOR_MESSAGES', (err, res) => { console.log('Received a General message.'); });
-    // Announce presence on Network
-    callSignalingServer(`${signalingPrefixAddress}.${uuid}`, 'ANNOUNCE_PRESENCE', (err, res) => { console.log('Presence announced !');} );
-     
-  }
+//  function connectWithPeers() {          
+//     // Normally supposed to test if connection state is OK here
+//     
+//    // Register for messages on unique address
+//    callSignalingServer(`${signalingPrefixAddress}.${uuid}`, 'REGISTER_FOR_MESSAGES', (err, res) => { console.log('Received a message destined to me only.', uuid); });
+//    // Register for general messages
+//    callSignalingServer(`${signalingPrefixAddress}`, 'REGISTER_FOR_MESSAGES', (err, res) => { console.log('Received a General message.'); });
+//    // Announce presence on Network
+//    callSignalingServer(`${signalingPrefixAddress}.${uuid}`, 'ANNOUNCE_PRESENCE', (err, res) => { console.log('Presence announced !');} );
+//     
+//  }
   
   
-  function callSignalingServer(address, action, callback) {
-      eb.send('webrtc.test', {
-          address: address,
-          action: action
-      },
-      callback);
-  }
+//  function callSignalingServer(address, action, callback) {
+//      eb.send('webrtc.test', {
+//          address: address,
+//          action: action
+//      },
+//      callback);
+//  }
   
 //  function announcePresenceOnNetwork() {
 //      eb.send('webrtc.test', 
@@ -54,17 +56,6 @@ Open the devtools to see this code running.
 //              (err, res) => { console.log('Presence announced !');
 //      });
 //  }
-  
-  // Utilities
-  function createUUID(){
-    var dt = new Date().getTime();
-    var uuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-        var r = (dt + Math.random()*16)%16 | 0;
-        dt = Math.floor(dt/16);
-        return (c === 'x' ? r :(r&0x3|0x8)).toString(16);
-    });
-    return uuid;
-}
 </script>
 
 </body>
