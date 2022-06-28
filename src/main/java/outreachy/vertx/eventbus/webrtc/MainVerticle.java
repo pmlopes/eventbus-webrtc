@@ -6,6 +6,7 @@ import io.vertx.core.Vertx;
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.bridge.PermittedOptions;
 import io.vertx.ext.web.Router;
+import io.vertx.ext.web.common.WebEnvironment;
 import io.vertx.ext.web.handler.BodyHandler;
 import io.vertx.ext.web.handler.StaticHandler;
 import io.vertx.ext.web.handler.sockjs.SockJSBridgeOptions;
@@ -14,6 +15,7 @@ import io.vertx.ext.web.handler.sockjs.SockJSHandler;
 public class MainVerticle extends AbstractVerticle {
 
   public static void main(String[] args) {
+    System.setProperty("vertxweb.environment", "dev");
     Vertx.vertx()
       .deployVerticle(new MainVerticle())
       .onFailure(err -> {
@@ -38,7 +40,7 @@ public class MainVerticle extends AbstractVerticle {
           .subRouter(SockJSHandler.create(vertx)
             .bridge(new SockJSBridgeOptions()
               .addInboundPermitted(new PermittedOptions().setAddressRegex("webrtc\\..*"))
-              .addInboundPermitted(new PermittedOptions().setAddressRegex("webrtc\\..*"))));
+              .addOutboundPermitted(new PermittedOptions().setAddressRegex("webrtc\\..*"))));
 
     // server static files from "src/main/resources/webroot"
     router.route().handler(StaticHandler.create());

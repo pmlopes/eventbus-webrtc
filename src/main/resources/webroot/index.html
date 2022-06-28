@@ -12,50 +12,129 @@ Open the devtools to see this code running.
 <button id="sendBtn">Send</button>
 
 <script>
+  function makeUUID() {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (a, b) {
+      return b = Math.random() * 16, (a == 'y' ? b & 3 | 8 : b | 0).toString(16);
+    });
+  }
+
   const eb = new EventBus("http://localhost:8888/eventbus");
-  
-  const signalingPrefixAddress = 'webrtc.signaling';
+
   eb.onopen = function () {
     // sockjs connection is ready!
     console.log('Successfully connected to signaling server !');
-    // 0. we start here, follow the rest of the logic on the server java side
-    document.getElementById('sendBtn').addEventListener('click', (event) => {
-        
-        
+
+    const webrtcId = makeUUID();
+
+    // TODO: make this a configurable option
+    const config = {
+      iceServers: [{
+        urls: "stun:stun.1.google.com:19302"
+      }]
+    };
+    const pc = new RTCPeerConnection(config);
+    // TODO: this isn't correct, for now we only connect to 1 node, but later
+    //       we will connect to multiple nodes
+    const dc = pc.createDataChannel("eventbus", {
+      negotiated: true,
+      // TODO: this will be a counter that increments for each connection
+      id: 0
     });
-    
+
+    // Some debug helper functions
+    function handleChange(evt) {
+      console.log(new Date().toISOString() + ': ConnectionState: ' + pc.connectionState + ' IceConnectionState: ' + pc.iceConnectionState);
+    }
+
+    pc.onconnectionstatechange = handleChange;
+    pc.oniceconnectionstatechange = handleChange;
+
+    dc.onmessage = e => console.log(e.data);
+    pc.oniceconnectionstatechange = e => console.log(pc.iceConnectionState);
+
+    // a new client joined the cluster
+    eb.registerHandler('webrtc.signaling', function (err, msg) {
+      console.log('2. A new browser has joined the cluster');
+
+      // TODO: we should not answer to our own messages
+      if (msg.body.webrtcId === webrtcId) {
+        return;
+      }
+
+      // We need to return when the message webrtcId is the same as ours
+
+      console.log('3. Create an offer, using webrtc');
+      // reply with a webrtc offer
+      pc.createOffer().then(offer => {
+        pc.setLocalDescription(offer).then(() => {
+          pc.onicecandidate = ({candidate}) => {
+            if (candidate) return;
+            console.log('4. We reply to the caller browser with the offer');
+
+            eb.send(msg.body.address, {
+              type: "offer",
+              webrtcId: webrtcId,
+              sdp: pc.localDescription.sdp
+            }, function (err, reply) {
+              console.log('8. We should have received a answer specific for this browswer');
+
+              console.log('9. We now need to finish the handshake');
+
+              // TODO: finish the handshake
+
+              pc.setRemoteDescription({
+                type: "answer",
+                sdp: reply.body.sdp
+              });
+            });
+          };
+        });
+      });
+    });
+
+    // a different client is offering a webrtc offer
+    eb.registerHandler('webrtc.' + webrtcId, function (err, msg) {
+      console.log('5. A offer for this browser was received');
+      // TODO: apply the sdp offer to the peer connection
+      pc.setRemoteDescription({
+        type: "offer",
+        sdp: msg.body.sdp
+      }).then(() => {
+        // TODO: create an answer and send it back to the other client
+        console.log('6. Create an answer for the specific offer');
+
+        pc.createAnswer().then(answer => {
+          pc.setLocalDescription(answer).then(() => {
+            pc.onicecandidate = ({candidate}) => {
+              if (candidate) return;
+              console.log('7. We reply to the specific browser using the reply function with the anwser');
+              // TODO: using msg.reply() to send the answer back to the other client
+              msg.reply({
+                type: "answer",
+                webrtcId: webrtcId,
+                sdp: pc.localDescription.sdp
+              });
+            };
+          });
+        });
+      });
+    });
+
+    console.log('1. Start the signaling process');
+    // start the webrtc handshake
+    eb.publish('webrtc.signaling', {
+      type: "join",
+      webrtcId: webrtcId,
+      address: "webrtc." + webrtcId
+    });
+
+    // // 0. we start here, follow the rest of the logic on the server java side
+    // document.getElementById('sendBtn').addEventListener('click', (event) => {
+    //
+    //
+    // });
+
   };
-  
-//  function connectWithPeers() {          
-//     // Normally supposed to test if connection state is OK here
-//     
-//    // Register for messages on unique address
-//    callSignalingServer(`${signalingPrefixAddress}.${uuid}`, 'REGISTER_FOR_MESSAGES', (err, res) => { console.log('Received a message destined to me only.', uuid); });
-//    // Register for general messages
-//    callSignalingServer(`${signalingPrefixAddress}`, 'REGISTER_FOR_MESSAGES', (err, res) => { console.log('Received a General message.'); });
-//    // Announce presence on Network
-//    callSignalingServer(`${signalingPrefixAddress}.${uuid}`, 'ANNOUNCE_PRESENCE', (err, res) => { console.log('Presence announced !');} );
-//     
-//  }
-  
-  
-//  function callSignalingServer(address, action, callback) {
-//      eb.send('webrtc.test', {
-//          address: address,
-//          action: action
-//      },
-//      callback);
-//  }
-  
-//  function announcePresenceOnNetwork() {
-//      eb.send('webrtc.test', 
-//              {
-//                  address: signalingPrefixAddress + uuid,
-//                  action: 'ANNOUNCE_PRESENCE'
-//              },
-//              (err, res) => { console.log('Presence announced !');
-//      });
-//  }
 </script>
 
 </body>

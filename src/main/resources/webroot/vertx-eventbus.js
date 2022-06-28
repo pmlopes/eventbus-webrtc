@@ -16,7 +16,7 @@
 !function (factory) {
   if (typeof require === 'function' && typeof module !== 'undefined') {
     // CommonJS loader
-    const SockJS = require('sockjs-client');
+    var SockJS = require('sockjs-client');
     if (!SockJS) {
       throw new Error('vertx-eventbus.js requires sockjs-client, see http://sockjs.org');
     }
@@ -34,10 +34,9 @@
   }
 }(function (SockJS) {
 
- /**** Utility functions ****/
   function makeUUID() {
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (a, b) {
-          return b = Math.random() * 16, (a === 'y' ? b & 3 | 8 : b | 0).toString(16);
+      return b = Math.random() * 16, (a == 'y' ? b & 3 | 8 : b | 0).toString(16);
     });
   }
 
@@ -47,7 +46,7 @@
         return defaultHeaders;
       }
 
-      for (let headerName in defaultHeaders) {
+      for (var headerName in defaultHeaders) {
         if (defaultHeaders.hasOwnProperty(headerName)) {
           // user can overwrite the default headers
           if (typeof headers[headerName] === 'undefined') {
@@ -61,8 +60,6 @@
     return headers || {};
   }
 
-/****** End of Utility functions ************/
-
   /**
    * EventBus
    *
@@ -70,9 +67,8 @@
    * @param options
    * @constructor
    */
-  const EventBus = function (url, options) {
-      console.log('Connecting to server...');
-    const self = this;
+  var EventBus = function (url, options) {
+    var self = this;
 
     options = options || {};
 
@@ -89,11 +85,11 @@
     this.reconnectDelayMax = options.vertxbus_reconnect_delay_max || 5000;
     this.reconnectExponent = options.vertxbus_reconnect_exponent || 2;
     this.randomizationFactor = options.vertxbus_randomization_factor || 0.5;
-    const getReconnectDelay = function() {
-      const ms = self.reconnectDelayMin * Math.pow(self.reconnectExponent, self.reconnectAttempts);
+    var getReconnectDelay = function() {
+      var ms = self.reconnectDelayMin * Math.pow(self.reconnectExponent, self.reconnectAttempts);
       if (self.randomizationFactor) {
-        const rand =  Math.random();
-        const deviation = Math.floor(rand * self.randomizationFactor * ms);
+        var rand =  Math.random();
+        var deviation = Math.floor(rand * self.randomizationFactor * ms);
         ms = (Math.floor(rand * 10) & 1) === 0  ? ms - deviation : ms + deviation;
       }
       return Math.min(ms, self.reconnectDelayMax) | 0;
@@ -128,55 +124,18 @@
       }
     };
 
-    const setupSockJSConnection = function () {
-      self.sockJSConn = new SockJS(url, options);
+    var setupSockJSConnection = function () {
+      self.sockJSConn = new SockJS(url, null, options);
       self.state = EventBus.CONNECTING;
-      console.log('Setting up socket connection...');
+
       // handlers and reply handlers are tied to the state of the socket
       // they are added onopen or when sending, so reset when reconnecting
       self.handlers = {};
       self.replyHandlers = {};
 
       self.sockJSConn.onopen = function () {
-        console.log('I\'m executing...');
         self.enablePing(true);
         self.state = EventBus.OPEN;
-        // TODO: here we begin with the webrtc handshake
-        self.webrtcId = makeUUID(); // this should be unique, perhaps it should happen on the constructor function
-        // we need to listen to a few events on the socket
-        // this connection specific
-        self.registerHandler(
-          `webrtc.signaling.${self.webrtcId}`,
-          message => {
-            console.log(message);
-            // point 5:
-            message.reply({webrtc: "anwser", anwser: 'the_webrtc_anwser_value' });
-          });
-        // generic events to all connections
-        self.registerHandler(
-          'webrtc.signaling',
-          message => {
-            console.log('Generic return', message);
-            // point 4.
-            // not sure if this is 100% correct, but we need to reply with a webrtc offer
-            // this needs the code we did on the github gist
-            self.send(
-              message.body.address,
-              { webrtc: "offer", offer: 'the_webrtc_offer_value' },
-              null,
-              reply => {
-                console.log(reply);
-              });
-          });
-
-        // broadcast that we're connected
-        self.publish(
-          'webrtc.signaling',
-          // this message will end up on the event just above
-          { webrtc: "announce", address: `webrtc.signaling.${self.webrtcId}` }
-        );
-
-
         self.onopen && self.onopen();
         if (self.reconnectTimerID) {
           self.reconnectAttempts = 0;
@@ -199,7 +158,7 @@
       };
 
       self.sockJSConn.onmessage = function (e) {
-        let json;
+        var json;
 
         try {
           json = JSON.parse(e.data);
@@ -222,8 +181,8 @@
 
         if (self.handlers[json.address]) {
           // iterate all registered handlers
-          const handlers = self.handlers[json.address];
-          for ( i = 0; i < handlers.length; i++) {
+          var handlers = self.handlers[json.address];
+          for (var i = 0; i < handlers.length; i++) {
             if (json.type === 'err') {
               handlers[i]({ failureCode: json.failureCode, failureType: json.failureType, message: json.message });
             } else {
@@ -232,7 +191,7 @@
           }
         } else if (self.replyHandlers[json.address]) {
           // Might be a reply message
-          const handler = self.replyHandlers[json.address];
+          var handler = self.replyHandlers[json.address];
           delete self.replyHandlers[json.address];
           if (json.type === 'err') {
             handler({ failureCode: json.failureCode, failureType: json.failureType, message: json.message });
@@ -261,7 +220,6 @@
    */
   EventBus.prototype.send = function (address, message, headers, callback) {
     // are we ready?
-    console.log('I enter here ! ')
     if (this.state !== EventBus.OPEN) {
       throw new Error('INVALID_STATE_ERR');
     }
@@ -271,15 +229,15 @@
       headers = {};
     }
 
-    const envelope = {
+    var envelope = {
       type: 'send',
       address: address,
       headers: mergeHeaders(this.defaultHeaders, headers),
-      body: "hELLO World !"
+      body: message
     };
 
     if (callback) {
-      const replyAddress = makeUUID();
+      var replyAddress = makeUUID();
       envelope.replyAddress = replyAddress;
       this.replyHandlers[replyAddress] = callback;
     }
@@ -333,8 +291,7 @@
       this.sockJSConn.send(JSON.stringify({
         type: 'register',
         address: address,
-        headers: mergeHeaders(this.defaultHeaders, headers),
-        message: {hello: "Hello"}
+        headers: mergeHeaders(this.defaultHeaders, headers)
       }));
     }
 
@@ -354,7 +311,7 @@
       throw new Error('INVALID_STATE_ERR');
     }
 
-    const handlers = this.handlers[address];
+    var handlers = this.handlers[address];
 
     if (handlers) {
 
@@ -363,7 +320,7 @@
         headers = {};
       }
 
-      const idx = handlers.indexOf(callback);
+      var idx = handlers.indexOf(callback);
       if (idx !== -1) {
         handlers.splice(idx, 1);
         if (handlers.length === 0) {
@@ -396,10 +353,10 @@
   EventBus.CLOSED = 3;
 
   EventBus.prototype.enablePing = function (enable) {
-    const self = this;
+    var self = this;
 
     if (enable) {
-      const sendPing = function () {
+      var sendPing = function () {
         self.sockJSConn.send(JSON.stringify({ type: 'ping' }));
       };
 
@@ -417,7 +374,7 @@
   };
 
   EventBus.prototype.enableReconnect = function (enable) {
-    const self = this;
+    var self = this;
 
     self.reconnectEnabled = enable;
     if (!enable && self.reconnectTimerID) {
