@@ -68,6 +68,7 @@
    * @constructor
    */
   var EventBus = function (url, options) {
+      
     var self = this;
 
     options = options || {};
@@ -85,14 +86,14 @@
     this.reconnectDelayMax = options.vertxbus_reconnect_delay_max || 5000;
     this.reconnectExponent = options.vertxbus_reconnect_exponent || 2;
     this.randomizationFactor = options.vertxbus_randomization_factor || 0.5;
-    var getReconnectDelay = function() {
-      var ms = self.reconnectDelayMin * Math.pow(self.reconnectExponent, self.reconnectAttempts);
+    var getReconnectDelay = function() {  
+          var ms = self.reconnectDelayMin * Math.pow(self.reconnectExponent, self.reconnectAttempts);
       if (self.randomizationFactor) {
         var rand =  Math.random();
         var deviation = Math.floor(rand * self.randomizationFactor * ms);
         ms = (Math.floor(rand * 10) & 1) === 0  ? ms - deviation : ms + deviation;
       }
-      return Math.min(ms, self.reconnectDelayMax) | 0;
+        return Math.min(ms, self.reconnectDelayMax) | 0;
     };
 
     this.defaultHeaders = null;
@@ -124,8 +125,11 @@
       }
     };
 
-    var setupSockJSConnection = function () {
-      self.sockJSConn = new SockJS(url, null, options);
+    var setupSockJSConnection = async function () {
+        
+      return new Promise((resolve, reject) => {
+          
+          self.sockJSConn = new SockJS(url, null, options);
       self.state = EventBus.CONNECTING;
 
       // handlers and reply handlers are tied to the state of the socket
@@ -200,10 +204,12 @@
           }
         } else {
           if (!json.event || !self.onevent(json.event, json.message)) {
-            self.onunhandled(json)
+            self.onunhandled(json);
           }
         }
-      }
+      };
+      resolve();
+      });
     };
 
     // function cannot be anonymous and self-calling due to pseudo-recursion
@@ -218,32 +224,36 @@
    * @param {Object} [headers]
    * @param {Function} [callback]
    */
-  EventBus.prototype.send = function (address, message, headers, callback) {
-    // are we ready?
-    if (this.state !== EventBus.OPEN) {
-      throw new Error('INVALID_STATE_ERR');
-    }
+    EventBus.prototype.send = async function (address, message, headers, callback) {
+        // are we ready?
+        return new Promise((resolve, reject) => {
+            if (this.state !== EventBus.OPEN) {
+                reject('INVALID_STATE_ERR');
+//          throw new Error('INVALID_STATE_ERR');
+            }
 
-    if (typeof headers === 'function') {
-      callback = headers;
-      headers = {};
-    }
+            if (typeof headers === 'function') {
+                callback = headers;
+                headers = {};
+            }
 
-    var envelope = {
-      type: 'send',
-      address: address,
-      headers: mergeHeaders(this.defaultHeaders, headers),
-      body: message
+            var envelope = {
+                type: 'send',
+                address: address,
+                headers: mergeHeaders(this.defaultHeaders, headers),
+                body: message
+            };
+
+            if (callback) {
+                var replyAddress = makeUUID();
+                envelope.replyAddress = replyAddress;
+                this.replyHandlers[replyAddress] = callback;
+            }
+
+            this.sockJSConn.send(JSON.stringify(envelope));
+            resolve();
+        });
     };
-
-    if (callback) {
-      var replyAddress = makeUUID();
-      envelope.replyAddress = replyAddress;
-      this.replyHandlers[replyAddress] = callback;
-    }
-
-    this.sockJSConn.send(JSON.stringify(envelope));
-  };
 
   /**
    * Publish a message
@@ -252,18 +262,23 @@
    * @param {Object} message
    * @param {Object} [headers]
    */
-  EventBus.prototype.publish = function (address, message, headers) {
+  EventBus.prototype.publish = async function (address, message, headers) {
     // are we ready?
-    if (this.state !== EventBus.OPEN) {
-      throw new Error('INVALID_STATE_ERR');
-    }
+    return new Promise((resolve, reject) => {
+        if (this.state !== EventBus.OPEN) {
+//          throw new Error('INVALID_STATE_ERR');
+            reject('INVALID_STATE_ERR');
+        }
 
-    this.sockJSConn.send(JSON.stringify({
-      type: 'publish',
-      address: address,
-      headers: mergeHeaders(this.defaultHeaders, headers),
+       this.sockJSConn.send(JSON.stringify({
+       type: 'publish',
+       address: address,
+        headers: mergeHeaders(this.defaultHeaders, headers),
       body: message
-    }));
+    })
+            );
+    resolve();
+    });
   };
 
   /**
@@ -273,10 +288,12 @@
    * @param {Object} [headers]
    * @param {Function} callback
    */
-  EventBus.prototype.registerHandler = function (address, headers, callback) {
+  EventBus.prototype.registerHandler = async function (address, headers, callback) {
     // are we ready?
-    if (this.state !== EventBus.OPEN) {
-      throw new Error('INVALID_STATE_ERR');
+    return new Promise((resolve, reject) => {
+        if (this.state !== EventBus.OPEN) {
+        reject('INVALID_STATE_ERR');
+//      throw new Error('INVALID_STATE_ERR');
     }
 
     if (typeof headers === 'function') {
@@ -296,6 +313,9 @@
     }
 
     this.handlers[address].push(callback);
+    
+    resolve();
+    });
   };
 
   /**
@@ -305,11 +325,14 @@
    * @param {Object} [headers]
    * @param {Function} callback
    */
-  EventBus.prototype.unregisterHandler = function (address, headers, callback) {
+  EventBus.prototype.unregisterHandler = async function (address, headers, callback) {
     // are we ready?
-    if (this.state !== EventBus.OPEN) {
-      throw new Error('INVALID_STATE_ERR');
-    }
+    return new Promise((resolve, reject) => {
+        
+        if (this.state !== EventBus.OPEN) {
+ //      throw new Error('INVALID_STATE_ERR');
+            reject('INVALID_STATE_ERR');
+        }
 
     var handlers = this.handlers[address];
 
@@ -335,16 +358,21 @@
         }
       }
     }
+    resolve();
+    });
   };
 
   /**
    * Closes the connection to the EventBus Bridge,
    * preventing any reconnect attempts
    */
-  EventBus.prototype.close = function () {
-    this.state = EventBus.CLOSING;
-    this.enableReconnect(false);
-    this.sockJSConn.close();
+  EventBus.prototype.close = async function () {
+    return new Promise((resolve, reject) => {
+        this.state = EventBus.CLOSING;
+        this.enableReconnect(false);
+        this.sockJSConn.close();
+        resolve();
+    });
   };
 
   EventBus.CONNECTING = 0;
@@ -352,8 +380,10 @@
   EventBus.CLOSING = 2;
   EventBus.CLOSED = 3;
 
-  EventBus.prototype.enablePing = function (enable) {
-    var self = this;
+  EventBus.prototype.enablePing = async function (enable) {
+    
+    return new Promise((resolve, reject) => {
+        var self = this;
 
     if (enable) {
       var sendPing = function () {
@@ -371,10 +401,13 @@
         self.pingTimerID = null;
       }
     }
+    resolve();
+    });
   };
 
-  EventBus.prototype.enableReconnect = function (enable) {
-    var self = this;
+  EventBus.prototype.enableReconnect = async function (enable) {
+    return new Promise((resolve, reject) => {
+        var self = this;
 
     self.reconnectEnabled = enable;
     if (!enable && self.reconnectTimerID) {
@@ -382,6 +415,8 @@
       self.reconnectTimerID = null;
       self.reconnectAttempts = 0;
     }
+    resolve();
+    });
   };
 
   if (typeof exports !== 'undefined') {
