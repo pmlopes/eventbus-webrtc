@@ -125,14 +125,12 @@
       }
     };
 
-    // TODO: this is a timer function, for this reason it should not be async as async means it can only called once
-    //       as a timer function it can be called multiple times
-    var setupSockJSConnection = async function () {
+    var setupSockJSConnection = function () {
 
       return new Promise((resolve, reject) => {
 
-          self.sockJSConn = new SockJS(url, null, options);
-      self.state = EventBus.CONNECTING;
+         self.sockJSConn = new SockJS(url, null, options);
+         self.state = EventBus.CONNECTING;
 
       // handlers and reply handlers are tied to the state of the socket
       // they are added onopen or when sending, so reset when reconnecting
@@ -228,20 +226,18 @@
    */
   // TODO: as we are returning a Promise we don't need to demark the function as async
   //       as we return a Promise we can remove the last argument
-    EventBus.prototype.send = async function (address, message, headers, callback) {
+    EventBus.prototype.send = function (address, message, headers) {
         // are we ready?
         return new Promise((resolve, reject) => {
             if (this.state !== EventBus.OPEN) {
               // TODO: the reject is correct here, but we should still have a Error type and return, otherwise
               //       we introduce a bug as code contines to execute after an error was thrown
-                reject('INVALID_STATE_ERR');
+              
+                reject(new Error('INVALID_STATE_ERR')); // I really have doubt here. Will be clear upon correction
 //          throw new Error('INVALID_STATE_ERR');
             }
 
-            // TODO: if the callback is removed, this statement doesn't do anything anymore
-            //       this was to handle the case of optional arguments.
             if (typeof headers === 'function') {
-                callback = headers;
                 headers = {};
             }
 
@@ -252,17 +248,16 @@
                 body: message
             };
 
-            if (callback) {
+//            if (callback) {
                 var replyAddress = makeUUID();
                 envelope.replyAddress = replyAddress;
                 // TODO: here is a challenge, the replyHandlers needs to hold both the {reject, resolve} functions
-                this.replyHandlers[replyAddress] = callback;
-            }
+//                this.replyHandlers[replyAddress] = callback;
+                  this.replyHandlers[replyAddress] = resolve({resolve: resolve, reject: reject}); // Not too sure here. I will really need your clarification please
+//            }
 
             this.sockJSConn.send(JSON.stringify(envelope));
-            // TODO: this is incorrect, the promise only resolves once a message is received
-            //       that happens above
-            resolve();
+            
         });
     };
 
@@ -279,7 +274,7 @@
     return new Promise((resolve, reject) => {
         if (this.state !== EventBus.OPEN) {
 //          throw new Error('INVALID_STATE_ERR');
-            reject('INVALID_STATE_ERR');
+            reject(new Error('INVALID_STATE_ERR')); // Needs confirmation
         }
 
        this.sockJSConn.send(JSON.stringify({
@@ -301,16 +296,16 @@
    * @param {Function} callback
    */
   // TODO: you need to apply the same ideas shared in the comments on the send function here too!
-  EventBus.prototype.registerHandler = async function (address, headers, callback) {
+  EventBus.prototype.registerHandler = function (address, headers, callback) {
     // are we ready?
     return new Promise((resolve, reject) => {
         if (this.state !== EventBus.OPEN) {
-        reject('INVALID_STATE_ERR');
+        reject(new Error('INVALID_STATE_ERR')); // Needs confirmation here
 //      throw new Error('INVALID_STATE_ERR');
     }
 
     if (typeof headers === 'function') {
-      callback = headers;
+//      callback = headers;
       headers = {};
     }
 
@@ -339,13 +334,13 @@
    * @param {Function} callback
    */
   // TODO: you need to apply the same ideas shared in the comments on the send function here too!
-  EventBus.prototype.unregisterHandler = async function (address, headers, callback) {
+  EventBus.prototype.unregisterHandler = function (address, headers, callback) {
     // are we ready?
     return new Promise((resolve, reject) => {
 
         if (this.state !== EventBus.OPEN) {
  //      throw new Error('INVALID_STATE_ERR');
-            reject('INVALID_STATE_ERR');
+            reject(new Error('INVALID_STATE_ERR')); // Needs confirmation here
         }
 
     var handlers = this.handlers[address];
@@ -381,7 +376,7 @@
    * preventing any reconnect attempts
    */
   // TODO: you need to apply the same ideas shared in the comments on the send function here too!
-  EventBus.prototype.close = async function () {
+  EventBus.prototype.close = function () {
     return new Promise((resolve, reject) => {
         this.state = EventBus.CLOSING;
         this.enableReconnect(false);
@@ -398,7 +393,9 @@
   // TODO: this function is not asynchenous, but it should not be "async"
   //       as a rule of thumb, all functions that didn't receive a callback are not asynchronous
   //       in this case they should remain as is
-  EventBus.prototype.enablePing = async function (enable) {
+  
+  // Question: By remain as it is you mean we should not make it return a Promise ?
+  EventBus.prototype.enablePing = function (enable) {
 
     return new Promise((resolve, reject) => {
         var self = this;
@@ -424,7 +421,7 @@
   };
 
   // TODO: same comments as above apply here
-  EventBus.prototype.enableReconnect = async function (enable) {
+  EventBus.prototype.enableReconnect = function (enable) {
     return new Promise((resolve, reject) => {
         var self = this;
 
