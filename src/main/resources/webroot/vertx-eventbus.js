@@ -173,8 +173,8 @@
         // define a reply function on the message itself
         if (json.replyAddress) {
           Object.defineProperty(json, 'reply', {
-            value: function (message, headers, callback) {
-              self.send(json.replyAddress, message, headers, callback);
+            value: function (message, headers) {
+              return self.send(json.replyAddress, message, headers);
             }
           });
         }
@@ -191,12 +191,12 @@
           }
         } else if (self.replyHandlers[json.address]) {
           // Might be a reply message
-          var handler = self.replyHandlers[json.address];
+          const executor = self.replyHandlers[json.address];
           delete self.replyHandlers[json.address];
           if (json.type === 'err') {
-            handler({ failureCode: json.failureCode, failureType: json.failureType, message: json.message });
+            executor.reject({ failureCode: json.failureCode, failureType: json.failureType, message: json.message });
           } else {
-            handler(null, json);
+            executor.resolve(json);
           }
         } else {
           if (!json.event || !self.onevent(json.event, json.message)) {
@@ -216,33 +216,29 @@
    * @param {String} address
    * @param {Object} message
    * @param {Object} [headers]
-   * @param {Function} [callback]
    */
-  EventBus.prototype.send = function (address, message, headers, callback) {
-    // are we ready?
-    if (this.state !== EventBus.OPEN) {
-      throw new Error('INVALID_STATE_ERR');
-    }
+  EventBus.prototype.send = function (address, message, headers) {
+    const self = this;
+    return new Promise(function (resolve, reject) {
+      // are we ready?
+      if (self.state !== EventBus.OPEN) {
+        reject(new Error('INVALID_STATE_ERR'));
+        return;
+      }
 
-    if (typeof headers === 'function') {
-      callback = headers;
-      headers = {};
-    }
+      var envelope = {
+        type: 'send',
+        address: address,
+        headers: mergeHeaders(self.defaultHeaders, headers),
+        body: message
+      };
 
-    var envelope = {
-      type: 'send',
-      address: address,
-      headers: mergeHeaders(this.defaultHeaders, headers),
-      body: message
-    };
-
-    if (callback) {
       var replyAddress = makeUUID();
       envelope.replyAddress = replyAddress;
-      this.replyHandlers[replyAddress] = callback;
-    }
-
-    this.sockJSConn.send(JSON.stringify(envelope));
+      // keep a reference to the promise executors
+      self.replyHandlers[replyAddress] = {resolve: resolve, reject: reject};
+      self.sockJSConn.send(JSON.stringify(envelope));
+    });
   };
 
   /**

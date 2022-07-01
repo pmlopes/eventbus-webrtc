@@ -71,22 +71,23 @@ Open the devtools to see this code running.
             if (candidate) return;
             console.log('4. We reply to the caller browser with the offer');
 
-            eb.send(msg.body.address, {
-              type: "offer",
-              webrtcId: webrtcId,
-              sdp: pc.localDescription.sdp
-            }, function (err, reply) {
-              console.log('8. We should have received a answer specific for this browswer');
+            eb
+              .send(msg.body.address, {
+                type: "offer",
+                webrtcId: webrtcId,
+                sdp: pc.localDescription.sdp
+              })
+              .then(reply => {
+                console.log('8. We should have received a answer specific for this browswer');
+                console.log('9. We now need to finish the handshake');
 
-              console.log('9. We now need to finish the handshake');
+                // TODO: finish the handshake
 
-              // TODO: finish the handshake
-
-              pc.setRemoteDescription({
-                type: "answer",
-                sdp: reply.body.sdp
+                pc.setRemoteDescription({
+                  type: "answer",
+                  sdp: reply.body.sdp
+                });
               });
-            });
           };
         });
       });
