@@ -68,7 +68,6 @@
    * @constructor
    */
   var EventBus = function (url, options) {
-
     var self = this;
 
     options = options || {};
@@ -87,13 +86,13 @@
     this.reconnectExponent = options.vertxbus_reconnect_exponent || 2;
     this.randomizationFactor = options.vertxbus_randomization_factor || 0.5;
     var getReconnectDelay = function() {
-          var ms = self.reconnectDelayMin * Math.pow(self.reconnectExponent, self.reconnectAttempts);
+      var ms = self.reconnectDelayMin * Math.pow(self.reconnectExponent, self.reconnectAttempts);
       if (self.randomizationFactor) {
         var rand =  Math.random();
         var deviation = Math.floor(rand * self.randomizationFactor * ms);
         ms = (Math.floor(rand * 10) & 1) === 0  ? ms - deviation : ms + deviation;
       }
-        return Math.min(ms, self.reconnectDelayMax) | 0;
+      return Math.min(ms, self.reconnectDelayMax) | 0;
     };
 
     this.defaultHeaders = null;
@@ -126,11 +125,8 @@
     };
 
     var setupSockJSConnection = function () {
-
-      return new Promise((resolve, reject) => {
-
-         self.sockJSConn = new SockJS(url, null, options);
-         self.state = EventBus.CONNECTING;
+      self.sockJSConn = new SockJS(url, null, options);
+      self.state = EventBus.CONNECTING;
 
       // handlers and reply handlers are tied to the state of the socket
       // they are added onopen or when sending, so reset when reconnecting
@@ -177,8 +173,8 @@
         // define a reply function on the message itself
         if (json.replyAddress) {
           Object.defineProperty(json, 'reply', {
-            value: function (message, headers, callback) {
-              self.send(json.replyAddress, message, headers, callback);
+            value: function (message, headers) {
+              return self.send(json.replyAddress, message, headers);
             }
           });
         }
@@ -195,21 +191,19 @@
           }
         } else if (self.replyHandlers[json.address]) {
           // Might be a reply message
-          var handler = self.replyHandlers[json.address];
+          const executor = self.replyHandlers[json.address];
           delete self.replyHandlers[json.address];
           if (json.type === 'err') {
-            handler({ failureCode: json.failureCode, failureType: json.failureType, message: json.message });
+            executor.reject({ failureCode: json.failureCode, failureType: json.failureType, message: json.message });
           } else {
-            handler(null, json);
+            executor.resolve(json);
           }
         } else {
           if (!json.event || !self.onevent(json.event, json.message)) {
-            self.onunhandled(json);
+            self.onunhandled(json)
           }
         }
-      };
-      resolve();
-      });
+      }
     };
 
     // function cannot be anonymous and self-calling due to pseudo-recursion
@@ -222,44 +216,30 @@
    * @param {String} address
    * @param {Object} message
    * @param {Object} [headers]
-   * @param {Function} [callback]
    */
-  // TODO: as we are returning a Promise we don't need to demark the function as async
-  //       as we return a Promise we can remove the last argument
-    EventBus.prototype.send = function (address, message, headers) {
-        // are we ready?
-        return new Promise((resolve, reject) => {
-            if (this.state !== EventBus.OPEN) {
-              // TODO: the reject is correct here, but we should still have a Error type and return, otherwise
-              //       we introduce a bug as code contines to execute after an error was thrown
-              
-                reject(new Error('INVALID_STATE_ERR')); // I really have doubt here. Will be clear upon correction
-//          throw new Error('INVALID_STATE_ERR');
-            }
+  EventBus.prototype.send = function (address, message, headers) {
+    const self = this;
+    return new Promise(function (resolve, reject) {
+      // are we ready?
+      if (self.state !== EventBus.OPEN) {
+        reject(new Error('INVALID_STATE_ERR'));
+        return;
+      }
 
-            if (typeof headers === 'function') {
-                headers = {};
-            }
+      var envelope = {
+        type: 'send',
+        address: address,
+        headers: mergeHeaders(self.defaultHeaders, headers),
+        body: message
+      };
 
-            var envelope = {
-                type: 'send',
-                address: address,
-                headers: mergeHeaders(this.defaultHeaders, headers),
-                body: message
-            };
-
-//            if (callback) {
-                var replyAddress = makeUUID();
-                envelope.replyAddress = replyAddress;
-                // TODO: here is a challenge, the replyHandlers needs to hold both the {reject, resolve} functions
-//                this.replyHandlers[replyAddress] = callback;
-                  this.replyHandlers[replyAddress] = resolve({resolve: resolve, reject: reject}); // Not too sure here. I will really need your clarification please
-//            }
-
-            this.sockJSConn.send(JSON.stringify(envelope));
-            
-        });
-    };
+      var replyAddress = makeUUID();
+      envelope.replyAddress = replyAddress;
+      // keep a reference to the promise executors
+      self.replyHandlers[replyAddress] = {resolve: resolve, reject: reject};
+      self.sockJSConn.send(JSON.stringify(envelope));
+    });
+  };
 
   /**
    * Publish a message
@@ -268,24 +248,18 @@
    * @param {Object} message
    * @param {Object} [headers]
    */
-  // TODO: you need to apply the same ideas shared in the comments on the send function here too!
-  EventBus.prototype.publish = async function (address, message, headers) {
+  EventBus.prototype.publish = function (address, message, headers) {
     // are we ready?
-    return new Promise((resolve, reject) => {
-        if (this.state !== EventBus.OPEN) {
-//          throw new Error('INVALID_STATE_ERR');
-            reject(new Error('INVALID_STATE_ERR')); // Needs confirmation
-        }
+    if (this.state !== EventBus.OPEN) {
+      throw new Error('INVALID_STATE_ERR');
+    }
 
-       this.sockJSConn.send(JSON.stringify({
-       type: 'publish',
-       address: address,
-        headers: mergeHeaders(this.defaultHeaders, headers),
+    this.sockJSConn.send(JSON.stringify({
+      type: 'publish',
+      address: address,
+      headers: mergeHeaders(this.defaultHeaders, headers),
       body: message
-    })
-            );
-    resolve();
-    });
+    }));
   };
 
   /**
@@ -295,13 +269,10 @@
    * @param {Object} [headers]
    * @param {Function} callback
    */
-  // TODO: you need to apply the same ideas shared in the comments on the send function here too!
   EventBus.prototype.registerHandler = function (address, headers, callback) {
     // are we ready?
-    return new Promise((resolve, reject) => {
-        if (this.state !== EventBus.OPEN) {
-        reject(new Error('INVALID_STATE_ERR')); // Needs confirmation here
-//      throw new Error('INVALID_STATE_ERR');
+    if (this.state !== EventBus.OPEN) {
+      throw new Error('INVALID_STATE_ERR');
     }
 
     if (typeof headers === 'function') {
@@ -321,9 +292,6 @@
     }
 
     this.handlers[address].push(callback);
-
-    resolve();
-    });
   };
 
   /**
@@ -333,15 +301,12 @@
    * @param {Object} [headers]
    * @param {Function} callback
    */
-  // TODO: you need to apply the same ideas shared in the comments on the send function here too!
   EventBus.prototype.unregisterHandler = function (address, headers, callback) {
     // are we ready?
-    return new Promise((resolve, reject) => {
-
-        if (this.state !== EventBus.OPEN) {
+    if (this.state !== EventBus.OPEN) {
  //      throw new Error('INVALID_STATE_ERR');
             reject(new Error('INVALID_STATE_ERR')); // Needs confirmation here
-        }
+    }
 
     var handlers = this.handlers[address];
 
@@ -367,22 +332,16 @@
         }
       }
     }
-    resolve();
-    });
   };
 
   /**
    * Closes the connection to the EventBus Bridge,
    * preventing any reconnect attempts
    */
-  // TODO: you need to apply the same ideas shared in the comments on the send function here too!
   EventBus.prototype.close = function () {
-    return new Promise((resolve, reject) => {
-        this.state = EventBus.CLOSING;
-        this.enableReconnect(false);
-        this.sockJSConn.close();
-        resolve();
-    });
+    this.state = EventBus.CLOSING;
+    this.enableReconnect(false);
+    this.sockJSConn.close();
   };
 
   EventBus.CONNECTING = 0;
@@ -390,15 +349,8 @@
   EventBus.CLOSING = 2;
   EventBus.CLOSED = 3;
 
-  // TODO: this function is not asynchenous, but it should not be "async"
-  //       as a rule of thumb, all functions that didn't receive a callback are not asynchronous
-  //       in this case they should remain as is
-  
-  // Question: By remain as it is you mean we should not make it return a Promise ?
   EventBus.prototype.enablePing = function (enable) {
-
-    return new Promise((resolve, reject) => {
-        var self = this;
+    var self = this;
 
     if (enable) {
       var sendPing = function () {
@@ -416,14 +368,10 @@
         self.pingTimerID = null;
       }
     }
-    resolve();
-    });
   };
 
-  // TODO: same comments as above apply here
   EventBus.prototype.enableReconnect = function (enable) {
-    return new Promise((resolve, reject) => {
-        var self = this;
+    var self = this;
 
     self.reconnectEnabled = enable;
     if (!enable && self.reconnectTimerID) {
@@ -431,8 +379,6 @@
       self.reconnectTimerID = null;
       self.reconnectAttempts = 0;
     }
-    resolve();
-    });
   };
 
   if (typeof exports !== 'undefined') {
