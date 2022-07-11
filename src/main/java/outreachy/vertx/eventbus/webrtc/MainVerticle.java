@@ -14,6 +14,8 @@ import io.vertx.ext.web.handler.sockjs.SockJSHandler;
 
 public class MainVerticle extends AbstractVerticle {
 
+  String broadcastAddress = "webrtc.signaling";
+    
   public static void main(String[] args) {
     System.setProperty("vertxweb.environment", "dev");
     Vertx.vertx()
@@ -27,11 +29,12 @@ public class MainVerticle extends AbstractVerticle {
   public void start(Promise<Void> startPromise) {
 
     // 1. register eventbus addresses
+    WebRTC wrtc = new WebRTC();
     vertx.eventBus()
       // 2. we will consume JSON objects sent to "webrtc.test"
-      .<JsonObject>consumer("webrtc.test")
-      .handler(WebRTC::onTestMessage);
-
+      .<JsonObject>consumer(broadcastAddress)
+      .handler(msg -> wrtc.onTestMessage(msg));
+     
     Router router = Router.router(vertx);
 
     // setup the eventbus sockjs on the server

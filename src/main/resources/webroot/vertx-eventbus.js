@@ -35,6 +35,7 @@
 }(function (SockJS) {
 
   function makeUUID() {
+      
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (a, b) {
       return b = Math.random() * 16, (a == 'y' ? b & 3 | 8 : b | 0).toString(16);
     });
@@ -67,8 +68,8 @@
    * @param options
    * @constructor
    */
-  var EventBus = function (url, options) {
-    var self = this;
+  const EventBus = function (url, options) {
+    const self = this;
 
     options = options || {};
 
@@ -85,11 +86,11 @@
     this.reconnectDelayMax = options.vertxbus_reconnect_delay_max || 5000;
     this.reconnectExponent = options.vertxbus_reconnect_exponent || 2;
     this.randomizationFactor = options.vertxbus_randomization_factor || 0.5;
-    var getReconnectDelay = function() {
-      var ms = self.reconnectDelayMin * Math.pow(self.reconnectExponent, self.reconnectAttempts);
+    const getReconnectDelay = function() {
+      let ms = self.reconnectDelayMin * Math.pow(self.reconnectExponent, self.reconnectAttempts);
       if (self.randomizationFactor) {
-        var rand =  Math.random();
-        var deviation = Math.floor(rand * self.randomizationFactor * ms);
+        const rand =  Math.random();
+        const deviation = Math.floor(rand * self.randomizationFactor * ms);
         ms = (Math.floor(rand * 10) & 1) === 0  ? ms - deviation : ms + deviation;
       }
       return Math.min(ms, self.reconnectDelayMax) | 0;
@@ -125,6 +126,7 @@
     };
 
     var setupSockJSConnection = function () {
+        
       self.sockJSConn = new SockJS(url, null, options);
       self.state = EventBus.CONNECTING;
 
@@ -134,6 +136,7 @@
       self.replyHandlers = {};
 
       self.sockJSConn.onopen = function () {
+          
         self.enablePing(true);
         self.state = EventBus.OPEN;
         self.onopen && self.onopen();
@@ -146,6 +149,7 @@
       };
 
       self.sockJSConn.onclose = function (e) {
+          
         self.state = EventBus.CLOSED;
         if (self.pingTimerID) clearInterval(self.pingTimerID);
         if (self.reconnectEnabled && self.reconnectAttempts < self.maxReconnectAttempts) {
@@ -158,7 +162,9 @@
       };
 
       self.sockJSConn.onmessage = function (e) {
-        var json;
+          
+        console.log('Message received ', e);
+        let json;
 
         try {
           json = JSON.parse(e.data);
@@ -170,6 +176,7 @@
           };
         }
 
+        console.log('Formatted JSONObje', json);
         // define a reply function on the message itself
         if (json.replyAddress) {
           Object.defineProperty(json, 'reply', {
@@ -181,6 +188,7 @@
 
         if (self.handlers[json.address]) {
           // iterate all registered handlers
+          debugger;
           var handlers = self.handlers[json.address];
           for (var i = 0; i < handlers.length; i++) {
             if (json.type === 'err') {
@@ -203,7 +211,7 @@
             self.onunhandled(json)
           }
         }
-      }
+      };
     };
 
     // function cannot be anonymous and self-calling due to pseudo-recursion
@@ -260,6 +268,7 @@
       headers: mergeHeaders(this.defaultHeaders, headers),
       body: message
     }));
+    console.log('Sent publish message to server !!!');
   };
 
   /**
