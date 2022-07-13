@@ -25,7 +25,7 @@ Open the dev tools to see this code running.
     console.log('Successfully connected to signaling server !');
 
     let connectionsCounter = 0;
-    
+
     const webrtcId = makeUUID();
 
     // TODO: make this a configurable option
@@ -37,6 +37,12 @@ Open the dev tools to see this code running.
     const pc = new RTCPeerConnection(config);
     // TODO: this isn't correct, for now we only connect to 1 node, but later
     //       we will connect to multiple nodes
+
+    // HERE is where you need to keep a map of webrtcId to remote data channels
+    // for each channel you open, or better, for each webrtcId you know you have a custom "dc".
+
+    // later you can refer to the specific dc as "dc[webrtcId]" as messages should alays include a webrtcId.
+    // this avoids you having to keep state on the java side
     const dc = pc.createDataChannel("eventbus", {
       negotiated: true,
       // TODO: this will be a counter that increments for each connection
