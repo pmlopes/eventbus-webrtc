@@ -43,7 +43,21 @@ public class MainVerticle extends AbstractVerticle {
           .subRouter(SockJSHandler.create(vertx)
             .bridge(new SockJSBridgeOptions()
               .addInboundPermitted(new PermittedOptions().setAddressRegex("webrtc\\..*"))
-              .addOutboundPermitted(new PermittedOptions().setAddressRegex("webrtc\\..*"))));
+              .addOutboundPermitted(new PermittedOptions().setAddressRegex("webrtc\\..*")),
+              bridgeEvent -> {
+                // TODO: here we will later capture the disconnect events
+                switch (bridgeEvent.type()) {
+                  case SOCKET_CREATED:
+                    // TODO: can we capture the webrtcId here ?
+                    break;
+                  case SOCKET_ERROR:
+                  case SOCKET_CLOSED:
+                    // TODO: publish to the signaling listeners a message that a given socket is disconnected
+                    //       the challenge here is to map the socket id to the webrtc id
+                    break;
+                }
+                bridgeEvent.complete();
+              }));
 
     // server static files from "src/main/resources/webroot"
     router.route().handler(StaticHandler.create());
