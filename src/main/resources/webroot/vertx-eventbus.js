@@ -35,9 +35,8 @@
 }(function (SockJS) {
 
   function makeUUID() {
-      
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (a, b) {
-      return b = Math.random() * 16, (a == 'y' ? b & 3 | 8 : b | 0).toString(16);
+      return b = Math.random() * 16, (a === 'y' ? b & 3 | 8 : b | 0).toString(16);
     });
   }
 
@@ -57,8 +56,7 @@
       }
     }
 
-    // headers are required to be a object
-    return headers || {};
+    return headers;
   }
 
   /**
@@ -68,7 +66,8 @@
    * @param options
    * @constructor
    */
-  const EventBus = function (url, options) {
+  function EventBus (url, options) {
+
     const self = this;
 
     options = options || {};
@@ -86,17 +85,18 @@
     this.reconnectDelayMax = options.vertxbus_reconnect_delay_max || 5000;
     this.reconnectExponent = options.vertxbus_reconnect_exponent || 2;
     this.randomizationFactor = options.vertxbus_randomization_factor || 0.5;
-    const getReconnectDelay = function() {
-      let ms = self.reconnectDelayMin * Math.pow(self.reconnectExponent, self.reconnectAttempts);
+
+    function getReconnectDelay() {
+      var ms = self.reconnectDelayMin * Math.pow(self.reconnectExponent, self.reconnectAttempts);
       if (self.randomizationFactor) {
-        const rand =  Math.random();
-        const deviation = Math.floor(rand * self.randomizationFactor * ms);
-        ms = (Math.floor(rand * 10) & 1) === 0  ? ms - deviation : ms + deviation;
+        var rand = Math.random();
+        var deviation = Math.floor(rand * self.randomizationFactor * ms);
+        ms = (Math.floor(rand * 10) & 1) === 0 ? ms - deviation : ms + deviation;
       }
       return Math.min(ms, self.reconnectDelayMax) | 0;
-    };
+    }
 
-    this.defaultHeaders = null;
+    this.defaultHeaders = undefined;
 
     // default event handlers
     this.onerror = function (err) {
@@ -125,8 +125,7 @@
       }
     };
 
-    var setupSockJSConnection = function () {
-        
+    function setupSockJSConnection() {
       self.sockJSConn = new SockJS(url, null, options);
       self.state = EventBus.CONNECTING;
 
@@ -136,7 +135,7 @@
       self.replyHandlers = {};
 
       self.sockJSConn.onopen = function () {
-          
+
         self.enablePing(true);
         self.state = EventBus.OPEN;
         self.onopen && self.onopen();
@@ -149,7 +148,7 @@
       };
 
       self.sockJSConn.onclose = function (e) {
-          
+
         self.state = EventBus.CLOSED;
         if (self.pingTimerID) clearInterval(self.pingTimerID);
         if (self.reconnectEnabled && self.reconnectAttempts < self.maxReconnectAttempts) {
@@ -162,8 +161,6 @@
       };
 
       self.sockJSConn.onmessage = function (e) {
-          
-        console.log('Message received ', e);
         let json;
 
         try {
@@ -176,7 +173,6 @@
           };
         }
 
-        console.log('Formatted JSONObje', json);
         // define a reply function on the message itself
         if (json.replyAddress) {
           Object.defineProperty(json, 'reply', {
@@ -188,7 +184,6 @@
 
         if (self.handlers[json.address]) {
           // iterate all registered handlers
-          debugger;
           var handlers = self.handlers[json.address];
           for (var i = 0; i < handlers.length; i++) {
             if (json.type === 'err') {
@@ -212,11 +207,11 @@
           }
         }
       };
-    };
+    }
 
     // function cannot be anonymous and self-calling due to pseudo-recursion
     setupSockJSConnection();
-  };
+  }
 
   /**
    * Send a message
@@ -226,26 +221,24 @@
    * @param {Object} [headers]
    */
   EventBus.prototype.send = function (address, message, headers) {
-    const self = this;
-    return new Promise(function (resolve, reject) {
-      // are we ready?
-      if (self.state !== EventBus.OPEN) {
-        reject(new Error('INVALID_STATE_ERR'));
-        return;
+    // are we ready?
+    return new Promise((resolve, reject) => {
+      if (this.state !== EventBus.OPEN) {
+        return reject(new Error('INVALID_STATE_ERR'));
       }
 
-      var envelope = {
+      let envelope = {
         type: 'send',
         address: address,
-        headers: mergeHeaders(self.defaultHeaders, headers),
+        headers: mergeHeaders(this.defaultHeaders, headers),
         body: message
       };
 
-      var replyAddress = makeUUID();
+      let replyAddress = makeUUID();
       envelope.replyAddress = replyAddress;
-      // keep a reference to the promise executors
-      self.replyHandlers[replyAddress] = {resolve: resolve, reject: reject};
-      self.sockJSConn.send(JSON.stringify(envelope));
+      this.replyHandlers[replyAddress] = {resolve: resolve, reject: reject};
+
+      this.sockJSConn.send(JSON.stringify(envelope));
     });
   };
 
@@ -258,17 +251,20 @@
    */
   EventBus.prototype.publish = function (address, message, headers) {
     // are we ready?
-    if (this.state !== EventBus.OPEN) {
-      throw new Error('INVALID_STATE_ERR');
-    }
+    return new Promise((resolve, reject) => {
+      if (this.state !== EventBus.OPEN) {
+        return reject(new Error('INVALID_STATE_ERR'));
+      }
 
-    this.sockJSConn.send(JSON.stringify({
-      type: 'publish',
-      address: address,
-      headers: mergeHeaders(this.defaultHeaders, headers),
-      body: message
-    }));
-    console.log('Sent publish message to server !!!');
+      this.sockJSConn.send(JSON.stringify({
+          type: 'publish',
+          address: address,
+          headers: mergeHeaders(this.defaultHeaders, headers),
+          body: message
+        })
+      );
+      resolve();
+    });
   };
 
   /**
@@ -281,18 +277,18 @@
   EventBus.prototype.registerHandler = function (address, headers, callback) {
     // are we ready?
     if (this.state !== EventBus.OPEN) {
-      throw new Error('INVALID_STATE_ERR');
+      return callback(new Error('INVALID_STATE_ERR'));
     }
 
     if (typeof headers === 'function') {
-//      callback = headers;
+      callback = headers;
       headers = {};
     }
 
     // ensure it is an array
     if (!this.handlers[address]) {
       this.handlers[address] = [];
-      // First handler for this address so we should register the connection
+      // First handler for this address, so we should register the connection
       this.sockJSConn.send(JSON.stringify({
         type: 'register',
         address: address,
@@ -313,11 +309,10 @@
   EventBus.prototype.unregisterHandler = function (address, headers, callback) {
     // are we ready?
     if (this.state !== EventBus.OPEN) {
- //      throw new Error('INVALID_STATE_ERR');
-            reject(new Error('INVALID_STATE_ERR')); // Needs confirmation here
+      return callback(new Error('INVALID_STATE_ERR'));
     }
 
-    var handlers = this.handlers[address];
+    let handlers = this.handlers[address];
 
     if (handlers) {
 
@@ -359,10 +354,10 @@
   EventBus.CLOSED = 3;
 
   EventBus.prototype.enablePing = function (enable) {
-    var self = this;
+    const self = this;
 
     if (enable) {
-      var sendPing = function () {
+      let sendPing = function () {
         self.sockJSConn.send(JSON.stringify({ type: 'ping' }));
       };
 
@@ -380,7 +375,7 @@
   };
 
   EventBus.prototype.enableReconnect = function (enable) {
-    var self = this;
+    const self = this;
 
     self.reconnectEnabled = enable;
     if (!enable && self.reconnectTimerID) {
