@@ -4,10 +4,18 @@ import io.vertx.core.Handler;
 import io.vertx.core.eventbus.EventBus;
 import io.vertx.ext.web.handler.sockjs.BridgeEvent;
 
+import java.util.ArrayList;
+import java.util.List;
+
 public interface WebRTC extends Handler<BridgeEvent> {
 
   static WebRTC create(EventBus eventBus) {
+
+
+
     return bridgeEvent -> {
+
+      List<PeerState> connections = new ArrayList<>();
 
       // this bridge event handler will intercept all messages sent to the eventbus
       // the main goal is to keep a list of all peers connected to the eventbus

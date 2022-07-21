@@ -34,31 +34,49 @@ Open the dev tools to see this code running.
         urls: "stun:stun.1.google.com:19302"
       }]
     };
-    const pc = new RTCPeerConnection(config);
-    // TODO: this isn't correct, for now we only connect to 1 node, but later
-    //       we will connect to multiple nodes
 
-    // HERE is where you need to keep a map of webrtcId to remote data channels
-    // for each channel you open, or better, for each webrtcId you know you have a custom "dc".
+    // each client needs to keep track of all known peers,
+    // for this we can create a map between a peerId and a RTCPeerConnection + DataChannel
+    // the simplest way is to use a JS Object
+    const peers = {};
 
-    // later you can refer to the specific dc as "dc[webrtcId]" as messages should alays include a webrtcId.
-    // this avoids you having to keep state on the java side
-    const dc = pc.createDataChannel("eventbus", {
-      negotiated: true,
-      // TODO: this will be a counter that increments for each connection
-      id: ++connectionsCounter
-    });
+
+    function Peer() {
+      this.pc = new RTCPeerConnection(config);
+      this.dc = this.pc.createDataChannel("eventbus", {
+        negotiated: true,
+        // TODO: this will be a counter that increments for each connection
+        id: ++connectionsCounter
+      });
+
+      this.pc.onconnectionstatechange = handleChange;
+      this.pc.oniceconnectionstatechange = handleChange;
+
+      this.dc.onmessage = e => console.log('Received ', e.data);
+      this.pc.oniceconnectionstatechange = e => console.log(this.pc.iceConnectionState);
+    }
+
+
+    // const pc = new RTCPeerConnection(config);
+    // // TODO: this isn't correct, for now we only connect to 1 node, but later
+    // //       we will connect to multiple nodes
+    //
+    // // HERE is where you need to keep a map of webrtcId to remote data channels
+    // // for each channel you open, or better, for each webrtcId you know you have a custom "dc".
+    //
+    // // later you can refer to the specific dc as "dc[webrtcId]" as messages should alays include a webrtcId.
+    // // this avoids you having to keep state on the java side
+    // const dc = pc.createDataChannel("eventbus", {
+    //   negotiated: true,
+    //   // TODO: this will be a counter that increments for each connection
+    //   id: ++connectionsCounter
+    // });
 
     // Some debug helper functions
     function handleChange(evt) {
-      console.log(new Date().toISOString() + ': ConnectionState: ' + pc.connectionState + ' IceConnectionState: ' + pc.iceConnectionState);
+      console.log(new Date().toISOString() + ': ConnectionState: ' + peers[webrtcId].pc.connectionState + ' IceConnectionState: ' + peers[webrtcId].pc.iceConnectionState);
     }
 
-    pc.onconnectionstatechange = handleChange;
-    pc.oniceconnectionstatechange = handleChange;
-
-    dc.onmessage = e => console.log('Received ', e.data);
-    pc.oniceconnectionstatechange = e => console.log(pc.iceConnectionState);
 
     // a new client joined the cluster
     eb.registerHandler('webrtc.signaling', function (err, msg) {
@@ -68,20 +86,27 @@ Open the dev tools to see this code running.
       if (msg.body.webrtcId === webrtcId) {
         return;
       }
+
+      const remoteWebrtcId = msg.body.webrtcId;
+
+      // when there is a new connection:
+      peers[remoteWebrtcId] = new Peer();
+
+
       // We need to return when the message webrtcId is the same as ours
 
       console.log('3. Create an offer, using webrtc');
       // reply with a webrtc offer
-      pc.createOffer().then(offer => {
-        pc.setLocalDescription(offer).then(() => {
-          pc.onicecandidate = ({candidate}) => {
+      peers[remoteWebrtcId].pc.createOffer().then(offer => {
+        peers[remoteWebrtcId].pc.setLocalDescription(offer).then(() => {
+          peers[remoteWebrtcId].pc.onicecandidate = ({candidate}) => {
             if (candidate) return;
             console.log('4. We reply to the caller browser with the offer');
 
             eb.send(msg.body.address, {
                 type: "offer",
                 webrtcId: webrtcId,
-                sdp: pc.localDescription.sdp
+                sdp: peers[remoteWebrtcId].pc.localDescription.sdp
               })
               .then(reply => {
                 console.log('8. We should have received a answer specific for this browswer');
@@ -89,7 +114,7 @@ Open the dev tools to see this code running.
 
                 // TODO: finish the handshake
 
-                pc.setRemoteDescription({
+                peers[remoteWebrtcId].pc.setRemoteDescription({
                   type: "answer",
                   sdp: reply.body.sdp
                 });
@@ -101,25 +126,28 @@ Open the dev tools to see this code running.
 
     // a different client is offering a webrtc offer
     eb.registerHandler('webrtc.' + webrtcId, function (err, msg) {
+
+      const remoteWebrtcId = msg.body.webrtcId;
+
       console.log('5. A offer for this browser was received');
       // TODO: apply the sdp offer to the peer connection
-      pc.setRemoteDescription({
+      peers[remoteWebrtcId].pc.setRemoteDescription({
         type: "offer",
         sdp: msg.body.sdp
       }).then(() => {
         // TODO: create an answer and send it back to the other client
         console.log('6. Create an answer for the specific offer');
 
-        pc.createAnswer().then(answer => {
-          pc.setLocalDescription(answer).then(() => {
-            pc.onicecandidate = ({candidate}) => {
+        peers[remoteWebrtcId].pc.createAnswer().then(answer => {
+          peers[remoteWebrtcId].pc.setLocalDescription(answer).then(() => {
+            peers[remoteWebrtcId].pc.onicecandidate = ({candidate}) => {
               if (candidate) return;
               console.log('7. We reply to the specific browser using the reply function with the anwser');
               // TODO: using msg.reply() to send the answer back to the other client
               msg.reply({
                 type: "answer",
                 webrtcId: webrtcId,
-                sdp: pc.localDescription.sdp
+                sdp: peers[remoteWebrtcId].pc.localDescription.sdp
               });
             };
           });
