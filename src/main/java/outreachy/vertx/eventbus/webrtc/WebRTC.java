@@ -35,7 +35,7 @@ public interface WebRTC extends Handler<BridgeEvent> {
         case SEND:
         case PUBLISH:
           // here we can capture the signaling event. We can lookup the peer element by socket.hashcode() and store the webrtcId
-          System.out.println(bridgeEvent.getRawMessage());
+          System.out.println("Message sent from js " + bridgeEvent.getRawMessage());
           break;
 
         case REGISTER:

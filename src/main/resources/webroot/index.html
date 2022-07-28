@@ -8,8 +8,9 @@
 <body>
 
 Open the dev tools to see this code running.
-<input type="text" placeholder="Type something and click send"/>
-<button id="sendBtn">Send</button>
+<input type="text" placeholder="Type something and send" id="chatInput"/>
+
+<div id="output"></div>
 
 <script>
   function makeUUID() {
@@ -18,6 +19,9 @@ Open the dev tools to see this code running.
     });
   }
 
+  const output = document.getElementById("output");
+  const log = msg => output.innerHTML += `<br>${msg}`;
+  
   const eb = new EventBus("http://localhost:8888/eventbus");
 
   eb.onopen = function () {
@@ -52,7 +56,7 @@ Open the dev tools to see this code running.
       this.pc.onconnectionstatechange = handleChange;
       this.pc.oniceconnectionstatechange = handleChange;
 
-      this.dc.onmessage = e => console.log('Received ', e.data);
+      this.dc.onmessage = e => {console.log('Received ', e.data); log(e.data)};
       this.pc.oniceconnectionstatechange = e => console.log(this.pc.iceConnectionState);
     }
 
@@ -86,21 +90,25 @@ Open the dev tools to see this code running.
       if (msg.body.webrtcId === webrtcId) {
         return;
       }
-
+      
       const remoteWebrtcId = msg.body.webrtcId;
+
+      if (msg.body.type === 'join') {
+        // I think here we should check if the type of the message is join since we want to send an offer
+        // only if the node is new otherwise it is most likely a broadcast message
+      }
+    
 
       // when there is a new connection:
       peers[remoteWebrtcId] = new Peer();
 
-
       // We need to return when the message webrtcId is the same as ours
-
-      console.log('3. Create an offer, using webrtc');
+      console.log('3. Create an offer, using webrtc', remoteWebrtcId, peers);
       // reply with a webrtc offer
       peers[remoteWebrtcId].pc.createOffer().then(offer => {
         peers[remoteWebrtcId].pc.setLocalDescription(offer).then(() => {
           peers[remoteWebrtcId].pc.onicecandidate = ({candidate}) => {
-            if (candidate) return;
+            if (candidate) {return;}
             console.log('4. We reply to the caller browser with the offer');
 
             eb.send(msg.body.address, {
@@ -118,10 +126,10 @@ Open the dev tools to see this code running.
                   type: "answer",
                   sdp: reply.body.sdp
                 });
-              });
+              }).catch(err => console.log('Error replying to other node\'s offer', err))
           };
-        });
-      });
+        }).catch(er => console.log('Err ', er))
+      }).catch(err => console.log('Error occured in creating offer ' + err));
     });
 
     // a different client is offering a webrtc offer
@@ -130,6 +138,8 @@ Open the dev tools to see this code running.
       const remoteWebrtcId = msg.body.webrtcId;
 
       console.log('5. A offer for this browser was received');
+      
+      peers[remoteWebrtcId] = new Peer();
       // TODO: apply the sdp offer to the peer connection
       peers[remoteWebrtcId].pc.setRemoteDescription({
         type: "offer",
@@ -163,6 +173,17 @@ Open the dev tools to see this code running.
       address: "webrtc." + webrtcId
     });
 
+    const chatInput = document.getElementById('chatInput');
+    chatInput.onkeypress = function (e) {
+        if (e.keyCode !== 13)
+          return;
+        Object.entries(peers).forEach(([key, value]) => {
+            value.dc.send(chatInput.value);
+        });
+//        dc.send(chatInput.value);
+        log(chatInput.value);
+        chatInput.value = '';
+    };
     // // 0. we start here, follow the rest of the logic on the server java side
     // document.getElementById('sendBtn').addEventListener('click', (event) => {
     //
